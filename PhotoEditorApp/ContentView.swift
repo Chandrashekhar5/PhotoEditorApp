@@ -84,15 +84,15 @@ struct ContentView: View {
                             .padding([.leading, .trailing, .top], 20)
                         
                         // Example Slider: Exposure
-                        AdjustmentSlider(title: "Exposure", value: $exposure, range: -5...5)
+                        AdjustmentSlider(title: "Exposure", value: $exposure, range: -100...100)
                         // Add more sliders for other adjustments
                         AdjustmentSlider(title: "Brilliance", value: $brilliance, range: -100...100)
                         AdjustmentSlider(title: "Highlights", value: $highlights, range: -100...100)
                         AdjustmentSlider(title: "Shadows", value: $shadows, range: -100...100)
-                        AdjustmentSlider(title: "Contrast", value: $contrast, range: 0...4)
-                        AdjustmentSlider(title: "Brightness", value: $brightness, range: -1...1)
-                        AdjustmentSlider(title: "Black Point", value: $blackPoint, range: 0...1)
-                        AdjustmentSlider(title: "Saturation", value: $saturation, range: 0...2)
+                        AdjustmentSlider(title: "Contrast", value: $contrast, range: -100...100)
+                        AdjustmentSlider(title: "Brightness", value: $brightness, range: -100...100)
+                        AdjustmentSlider(title: "Black Point", value: $blackPoint, range: -100...100)
+                        AdjustmentSlider(title: "Saturation", value: $saturation, range: -100...100)
                         AdjustmentSlider(title: "Vibrance", value: $vibrance, range: -100...100)
                         AdjustmentSlider(title: "Warmth", value: $warmth, range: -100...100)
                         AdjustmentSlider(title: "Tint", value: $tint, range: -100...100)
@@ -146,6 +146,20 @@ struct ContentView: View {
     
     func loadImage() {
         guard let inputImage = inputImage else { return }
+        // Reset all adjustment values to their defaults
+        exposure = 0
+        brilliance = 0
+        highlights = 0
+        shadows = 0
+        contrast = 1
+        brightness = 0
+        blackPoint = 0
+        saturation = 1
+        vibrance = 0
+        warmth = 0
+        tint = 0
+        filterIntensity = 0.5
+        selectedFilter = "None"
         processedImage = inputImage
         applyProcessing()
     }
@@ -154,60 +168,104 @@ struct ContentView: View {
         guard let inputImage = inputImage else { return }
         
         let ciImage = CIImage(image: inputImage)
-        
-        // Start with the original image
         var outputImage = ciImage
         
-        // Apply Exposure
+        // Apply Exposure (only if not default)
         if exposure != 0 {
             let exposureFilter = CIFilter.exposureAdjust()
             exposureFilter.inputImage = outputImage
-            exposureFilter.ev = Float(exposure)
+            exposureFilter.ev = Float(exposure / 50) // Scaling -100...100 to -2...2
             outputImage = exposureFilter.outputImage
         }
         
-        // Apply Brilliance (using brightness)
+        // Apply Brilliance (only if not default)
         if brilliance != 0 {
             let brightnessFilter = CIFilter.colorControls()
             brightnessFilter.inputImage = outputImage
-            brightnessFilter.brightness = Float(brilliance / 100)
+            brightnessFilter.brightness = Float(brilliance / 100) // -100...100 to -1...1
             outputImage = brightnessFilter.outputImage
         }
         
-        // Apply Contrast
-        let contrastFilter = CIFilter.colorControls()
-        contrastFilter.inputImage = outputImage
-        contrastFilter.contrast = Float(contrast)
-        outputImage = contrastFilter.outputImage
-        
-        // Apply Brightness
-        let brightnessFilter2 = CIFilter.colorControls()
-        brightnessFilter2.inputImage = outputImage
-        brightnessFilter2.brightness = Float(brightness)
-        outputImage = brightnessFilter2.outputImage
-        
-        // Apply Saturation
-        let saturationFilter = CIFilter.colorControls()
-        saturationFilter.inputImage = outputImage
-        saturationFilter.saturation = Float(saturation)
-        outputImage = saturationFilter.outputImage
-        
-        // Apply Warmth and Tint
-        if warmth != 0 || tint != 0 {
-            let tempAndTintFilter = CIFilter.temperatureAndTint()
-            tempAndTintFilter.inputImage = outputImage
-            
-            // Adjust warmth and tint by setting neutral and target neutral values
-            let neutralVector = CIVector(x: CGFloat(Float(warmth)), y: 0)
-            let targetNeutralVector = CIVector(x: CGFloat(Float(tint)), y: 0)
-            
-            tempAndTintFilter.setValue(neutralVector, forKey: "inputNeutral")
-            tempAndTintFilter.setValue(targetNeutralVector, forKey: "inputTargetNeutral")
-            
-            outputImage = tempAndTintFilter.outputImage
+        // Apply Highlights (only if not default)
+        if highlights != 0 {
+            let highlightFilter = CIFilter.highlightShadowAdjust()
+            highlightFilter.inputImage = outputImage
+            highlightFilter.highlightAmount = Float(highlights / 100) // -100...100 to 0...1
+            outputImage = highlightFilter.outputImage
         }
         
-        // Apply Filters
+        // Apply Shadows (only if not default)
+        if shadows != 0 {
+            let shadowFilter = CIFilter.highlightShadowAdjust()
+            shadowFilter.inputImage = outputImage
+            shadowFilter.shadowAmount = Float((shadows + 100) / 200) // Scaling -100...100 to 0...1
+            outputImage = shadowFilter.outputImage
+        }
+        
+        // Apply Contrast (only if not default)
+        if contrast != 1 {
+            let contrastFilter = CIFilter.colorControls()
+            contrastFilter.inputImage = outputImage
+            contrastFilter.contrast = Float((contrast + 100) / 50) // -100...100 to 0...4
+            outputImage = contrastFilter.outputImage
+        }
+        
+        // Apply Brightness (only if not default)
+        if brightness != 0 {
+            let brightnessFilter2 = CIFilter.colorControls()
+            brightnessFilter2.inputImage = outputImage
+            brightnessFilter2.brightness = Float(brightness / 100) // -100...100 to -1...1
+            outputImage = brightnessFilter2.outputImage
+        }
+        
+        // Apply Black Point (only if not default)
+        if blackPoint != 0 {
+            let blackPointFilter = CIFilter.colorControls()
+            blackPointFilter.inputImage = outputImage
+            blackPointFilter.brightness = Float(-blackPoint / 100) // Inverted black point scaling
+            outputImage = blackPointFilter.outputImage
+        }
+        
+        // Apply Saturation (only if not default)
+        if saturation != 1 {
+            let saturationFilter = CIFilter.colorControls()
+            saturationFilter.inputImage = outputImage
+            saturationFilter.saturation = Float((saturation + 100) / 100)
+            outputImage = saturationFilter.outputImage
+        }
+        
+        // Apply Vibrance (only if not default)
+        if vibrance != 0 {
+            let vibranceFilter = CIFilter.vibrance()
+            vibranceFilter.inputImage = outputImage
+            vibranceFilter.amount = Float(vibrance / 100) // Vibrance -100...100 scaled to -1...1
+            outputImage = vibranceFilter.outputImage
+        }
+        
+        // Apply Warmth and Tint (only if not default)
+        // Corrected Warmth and Tint with Clamping
+        if warmth != 0 || tint != 0 {
+            let temperatureAndTintFilter = CIFilter.temperatureAndTint()
+            temperatureAndTintFilter.inputImage = outputImage
+            
+            // Clamp warmth and tint to avoid extreme values causing invalid images
+            let clampedWarmth = min(max(warmth, -100), 100)
+            let clampedTint = min(max(tint, -5), 5)      // Limit tint to -5...5 range
+            
+            // Adjust neutral and targetNeutral based on clamped values
+            let neutral = CIVector(x: 6500 + CGFloat(clampedWarmth * 50), y: 0)  // Adjusted Warmth scaling
+            let targetNeutral = CIVector(x: 6500, y: CGFloat(clampedTint * 100)) // Adjusted Tint scaling
+            
+            temperatureAndTintFilter.neutral = neutral
+            temperatureAndTintFilter.targetNeutral = targetNeutral
+            
+            if let filteredImage = temperatureAndTintFilter.outputImage {
+                outputImage = filteredImage
+            }
+        }
+        
+        
+        // Apply Filters (only if not "None")
         if selectedFilter == "Vivid" {
             let vividFilter = CIFilter.photoEffectChrome()
             vividFilter.inputImage = outputImage
@@ -225,6 +283,7 @@ struct ContentView: View {
             processedImage = uiImage
         }
     }
+    
     
     
     // MARK: - Photo Picker
