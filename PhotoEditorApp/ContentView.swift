@@ -17,9 +17,8 @@ struct ContentView: View {
     @State private var inputImage: UIImage?
     @State private var processedImage: UIImage?
     
-    // Core Image context and filters
+    // Core Image context
     let context = CIContext()
-    let filter = CIFilter.colorControls()
     
     // Adjustment properties
     @State private var exposure: Double = 0
@@ -33,7 +32,7 @@ struct ContentView: View {
     @State private var vibrance: Double = 0
     @State private var warmth: Double = 0
     @State private var tint: Double = 0
-    
+    @State private var gradient: Double = 0
     // Filter properties
     @State private var selectedFilter: String = "None"
     @State private var filterIntensity: Double = 0.5
@@ -83,9 +82,7 @@ struct ContentView: View {
                             .font(.headline)
                             .padding([.leading, .trailing, .top], 20)
                         
-                        // Example Slider: Exposure
                         AdjustmentSlider(title: "Exposure", value: $exposure, range: -100...100)
-                        // Add more sliders for other adjustments
                         AdjustmentSlider(title: "Brilliance", value: $brilliance, range: -100...100)
                         AdjustmentSlider(title: "Highlights", value: $highlights, range: -100...100)
                         AdjustmentSlider(title: "Shadows", value: $shadows, range: -100...100)
@@ -96,6 +93,8 @@ struct ContentView: View {
                         AdjustmentSlider(title: "Vibrance", value: $vibrance, range: -100...100)
                         AdjustmentSlider(title: "Warmth", value: $warmth, range: -100...100)
                         AdjustmentSlider(title: "Tint", value: $tint, range: -100...100)
+                        AdjustmentSlider(title: "Gradient", value: $gradient, range: -100...100)
+                        
                     }
                 }
                 
@@ -139,6 +138,7 @@ struct ContentView: View {
             .onChange(of: tint) { _ in applyProcessing() }
             .onChange(of: selectedFilter) { _ in applyProcessing() }
             .onChange(of: filterIntensity) { _ in applyProcessing() }
+            .onChange(of: gradient) { _ in applyProcessing() }
         }
     }
     
@@ -146,7 +146,12 @@ struct ContentView: View {
     
     func loadImage() {
         guard let inputImage = inputImage else { return }
-        // Reset all adjustment values to their defaults
+        resetAdjustments()
+        processedImage = inputImage
+        applyProcessing()
+    }
+    
+    func resetAdjustments() {
         exposure = 0
         brilliance = 0
         highlights = 0
@@ -160,8 +165,7 @@ struct ContentView: View {
         tint = 0
         filterIntensity = 0.5
         selectedFilter = "None"
-        processedImage = inputImage
-        applyProcessing()
+        gradient = 0
     }
     
     func applyProcessing() {
@@ -170,111 +174,11 @@ struct ContentView: View {
         let ciImage = CIImage(image: inputImage)
         var outputImage = ciImage
         
-        // Apply Exposure (only if not default)
-        if exposure != 0 {
-            let exposureFilter = CIFilter.exposureAdjust()
-            exposureFilter.inputImage = outputImage
-            exposureFilter.ev = Float(exposure / 50) // Scaling -100...100 to -2...2
-            outputImage = exposureFilter.outputImage
-        }
+        // Apply adjustments
+        applyAdjustments(to: &outputImage)
         
-        // Apply Brilliance (only if not default)
-        if brilliance != 0 {
-            let brightnessFilter = CIFilter.colorControls()
-            brightnessFilter.inputImage = outputImage
-            brightnessFilter.brightness = Float(brilliance / 100) // -100...100 to -1...1
-            outputImage = brightnessFilter.outputImage
-        }
-        
-        // Apply Highlights (only if not default)
-        if highlights != 0 {
-            let highlightFilter = CIFilter.highlightShadowAdjust()
-            highlightFilter.inputImage = outputImage
-            highlightFilter.highlightAmount = Float(highlights / 100) // -100...100 to 0...1
-            outputImage = highlightFilter.outputImage
-        }
-        
-        // Apply Shadows (only if not default)
-        if shadows != 0 {
-            let shadowFilter = CIFilter.highlightShadowAdjust()
-            shadowFilter.inputImage = outputImage
-            shadowFilter.shadowAmount = Float((shadows + 100) / 200) // Scaling -100...100 to 0...1
-            outputImage = shadowFilter.outputImage
-        }
-        
-        // Apply Contrast (only if not default)
-        if contrast != 1 {
-            let contrastFilter = CIFilter.colorControls()
-            contrastFilter.inputImage = outputImage
-            contrastFilter.contrast = Float((contrast + 100) / 50) // -100...100 to 0...4
-            outputImage = contrastFilter.outputImage
-        }
-        
-        // Apply Brightness (only if not default)
-        if brightness != 0 {
-            let brightnessFilter2 = CIFilter.colorControls()
-            brightnessFilter2.inputImage = outputImage
-            brightnessFilter2.brightness = Float(brightness / 100) // -100...100 to -1...1
-            outputImage = brightnessFilter2.outputImage
-        }
-        
-        // Apply Black Point (only if not default)
-        if blackPoint != 0 {
-            let blackPointFilter = CIFilter.colorControls()
-            blackPointFilter.inputImage = outputImage
-            blackPointFilter.brightness = Float(-blackPoint / 100) // Inverted black point scaling
-            outputImage = blackPointFilter.outputImage
-        }
-        
-        // Apply Saturation (only if not default)
-        if saturation != 1 {
-            let saturationFilter = CIFilter.colorControls()
-            saturationFilter.inputImage = outputImage
-            saturationFilter.saturation = Float((saturation + 100) / 100)
-            outputImage = saturationFilter.outputImage
-        }
-        
-        // Apply Vibrance (only if not default)
-        if vibrance != 0 {
-            let vibranceFilter = CIFilter.vibrance()
-            vibranceFilter.inputImage = outputImage
-            vibranceFilter.amount = Float(vibrance / 100) // Vibrance -100...100 scaled to -1...1
-            outputImage = vibranceFilter.outputImage
-        }
-        
-        // Apply Warmth and Tint (only if not default)
-        // Corrected Warmth and Tint with Clamping
-        if warmth != 0 || tint != 0 {
-            let temperatureAndTintFilter = CIFilter.temperatureAndTint()
-            temperatureAndTintFilter.inputImage = outputImage
-            
-            // Clamp warmth and tint to avoid extreme values causing invalid images
-            let clampedWarmth = min(max(warmth, -100), 100)
-            let clampedTint = min(max(tint, -5), 5)      // Limit tint to -5...5 range
-            
-            // Adjust neutral and targetNeutral based on clamped values
-            let neutral = CIVector(x: 6500 + CGFloat(clampedWarmth * 50), y: 0)  // Adjusted Warmth scaling
-            let targetNeutral = CIVector(x: 6500, y: CGFloat(clampedTint * 100)) // Adjusted Tint scaling
-            
-            temperatureAndTintFilter.neutral = neutral
-            temperatureAndTintFilter.targetNeutral = targetNeutral
-            
-            if let filteredImage = temperatureAndTintFilter.outputImage {
-                outputImage = filteredImage
-            }
-        }
-        
-        
-        // Apply Filters (only if not "None")
-        if selectedFilter == "Vivid" {
-            let vividFilter = CIFilter.photoEffectChrome()
-            vividFilter.inputImage = outputImage
-            outputImage = vividFilter.outputImage
-        } else if selectedFilter == "Vivid Warm" {
-            let vividWarmFilter = CIFilter.photoEffectProcess()
-            vividWarmFilter.inputImage = outputImage
-            outputImage = vividWarmFilter.outputImage
-        }
+        // Apply filters
+        applyFilters(to: &outputImage)
         
         // Convert output image back to UIImage
         if let outputImage = outputImage,
@@ -283,76 +187,196 @@ struct ContentView: View {
             processedImage = uiImage
         }
     }
-    
-    
-    
-    // MARK: - Photo Picker
-    
-    struct PhotoPicker: UIViewControllerRepresentable {
-        @Binding var image: UIImage?
+    func applyAdjustments(to outputImage: inout CIImage?) {
+        guard var image = outputImage else { return }
         
-        class Coordinator: NSObject, PHPickerViewControllerDelegate {
-            let parent: PhotoPicker
+        // Store the original image to revert if needed
+        let originalImage = image
+        
+        // Apply Exposure Adjustment
+        if exposure != 0 {
+            let exposureFilter = CIFilter.exposureAdjust()
+            exposureFilter.inputImage = image
+            exposureFilter.ev = Float(exposure / 50)
+            image = exposureFilter.outputImage ?? image
+        }
+        
+        // Apply Brilliance Adjustment
+        if brilliance != 0 {
+            let brillianceFilter = CIFilter.colorControls()
+            brillianceFilter.inputImage = image
+            brillianceFilter.brightness = Float(brilliance / 100)
+            image = brillianceFilter.outputImage ?? image
+        }
+        
+        // Apply Highlights Adjustment
+        if highlights != 0 {
+            let highlightFilter = CIFilter.highlightShadowAdjust()
+            highlightFilter.inputImage = image
+            highlightFilter.highlightAmount = Float(highlights / 100)
+            image = highlightFilter.outputImage ?? image
+        }
+        
+        // Apply Shadows Adjustment
+        if shadows != 0 {
+            let shadowFilter = CIFilter.highlightShadowAdjust()
+            shadowFilter.inputImage = image
+            shadowFilter.shadowAmount = Float((shadows + 100) / 200)
+            image = shadowFilter.outputImage ?? image
+        }
+        
+        // Apply Contrast Adjustment
+        if contrast != 1 {
+            let contrastFilter = CIFilter.colorControls()
+            contrastFilter.inputImage = image
+            contrastFilter.contrast = Float((contrast + 100) / 50)
+            image = contrastFilter.outputImage ?? image
+        }
+        
+        // Apply Brightness Adjustment
+        if brightness != 0 {
+            let brightnessFilter2 = CIFilter.colorControls()
+            brightnessFilter2.inputImage = image
+            brightnessFilter2.brightness = Float(brightness / 100)
+            image = brightnessFilter2.outputImage ?? image
+        }
+        
+        // Apply Black Point Adjustment
+        if blackPoint != 0 {
+            let blackPointFilter = CIFilter.colorControls()
+            blackPointFilter.inputImage = image
+            blackPointFilter.brightness = Float(-blackPoint / 100)
+            image = blackPointFilter.outputImage ?? image
+        }
+        
+        // Apply Saturation Adjustment
+        if saturation != 1 {
+            let saturationFilter = CIFilter.colorControls()
+            saturationFilter.inputImage = image
+            saturationFilter.saturation = Float((saturation + 100) / 100)
+            image = saturationFilter.outputImage ?? image
+        }
+        
+        // Apply Vibrance Adjustment
+        if vibrance != 0 {
+            let vibranceFilter = CIFilter.vibrance()
+            vibranceFilter.inputImage = image
+            vibranceFilter.amount = Float(vibrance / 100)
+            image = vibranceFilter.outputImage ?? image
+        }
+        
+        // Apply Warmth Adjustment
+        if warmth != 0 {
+            let warmthFilter = CIFilter.temperatureAndTint()
+            warmthFilter.inputImage = image
+            warmthFilter.neutral = CIVector(x: CGFloat(warmth + 6500), y: CGFloat(tint + 0))
+            image = warmthFilter.outputImage ?? image
+        }
+        
+        // Apply Gradient Adjustment
+        if gradient != 0 {
+            let gradientFilter = CIFilter(name: "CILinearGradient")!
+            let width = image.extent.width
+            let height = image.extent.height
             
-            init(parent: PhotoPicker) {
-                self.parent = parent
+            gradientFilter.setValue(CIVector(x: width / 2, y: 0), forKey: "inputPoint0") // Start at top center
+            gradientFilter.setValue(CIVector(x: width / 2, y: height), forKey: "inputPoint1") // End at bottom center
+            
+            // Color calculation based on gradient value
+            let intensity = CGFloat((gradient + 100) / 200)
+            gradientFilter.setValue(CIColor(red: 1, green: 0, blue: 0, alpha: intensity), forKey: "inputColor0") // Top color
+            gradientFilter.setValue(CIColor(red: 0, green: 0, blue: 1, alpha: 1 - intensity), forKey: "inputColor1") // Bottom color
+            
+            guard let gradientImage = gradientFilter.outputImage?.cropped(to: image.extent) else { return }
+            
+            // Blend the gradient with the current image
+            let blendFilter = CIFilter(name: "CISourceOverCompositing")!
+            blendFilter.setValue(gradientImage, forKey: kCIInputImageKey)
+            blendFilter.setValue(image, forKey: kCIInputBackgroundImageKey)
+            
+            image = blendFilter.outputImage ?? image
+        } else {
+            // If gradient is 0, we should keep the original image without any gradient
+            outputImage = image // Maintain the last processed image without gradient effect
+            return
+        }
+        
+        // Assign the final image back to outputImage
+        outputImage = image
+    }
+    
+    
+    func applyFilters(to outputImage: inout CIImage?) {
+        if selectedFilter == "Vivid" {
+            let vividFilter = CIFilter.colorControls()
+            vividFilter.inputImage = outputImage
+            vividFilter.saturation = Float(filterIntensity * 2)
+            outputImage = vividFilter.outputImage
+        }
+        
+        if selectedFilter == "Vivid Warm" {
+            let vividWarmFilter = CIFilter.temperatureAndTint()
+            vividWarmFilter.inputImage = outputImage
+            vividWarmFilter.neutral = CIVector(x: CGFloat(7000 * filterIntensity), y: 0)
+            outputImage = vividWarmFilter.outputImage
+        }
+    }
+}
+
+struct AdjustmentSlider: View {
+    var title: String
+    @Binding var value: Double
+    var range: ClosedRange<Double>
+    
+    var body: some View {
+        VStack {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int(value))")
             }
+            Slider(value: $value, in: range)
+        }
+        .padding([.leading, .trailing], 20)
+    }
+}
+
+struct PhotoPicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration(photoLibrary: .shared())
+        config.selectionLimit = 1
+        config.filter = .images
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        var parent: PhotoPicker
+        
+        init(_ parent: PhotoPicker) {
+            self.parent = parent
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
             
-            func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-                picker.dismiss(animated: true)
-                
-                guard let provider = results.first?.itemProvider else { return }
-                
-                if provider.canLoadObject(ofClass: UIImage.self) {
-                    provider.loadObject(ofClass: UIImage.self) { image, _ in
-                        DispatchQueue.main.async {
-                            self.parent.image = image as? UIImage
-                        }
+            guard let provider = results.first?.itemProvider else { return }
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.image = image as? UIImage
                     }
                 }
             }
-        }
-        
-        func makeCoordinator() -> Coordinator {
-            Coordinator(parent: self)
-        }
-        
-        func makeUIViewController(context: Context) -> PHPickerViewController {
-            var config = PHPickerConfiguration()
-            config.filter = .images // Only images
-            config.selectionLimit = 1 // Single selection
-            
-            let picker = PHPickerViewController(configuration: config)
-            picker.delegate = context.coordinator
-            return picker
-        }
-        
-        func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-    }
-    
-    // MARK: - Adjustment Slider View
-    
-    struct AdjustmentSlider: View {
-        var title: String
-        @Binding var value: Double
-        var range: ClosedRange<Double>
-        
-        var body: some View {
-            VStack {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    Text(String(format: "%.2f", value))
-                }
-                Slider(value: $value, in: range)
-            }
-            .padding([.leading, .trailing], 20)
-        }
-    }
-    
-    struct ContentView_Previews: PreviewProvider {
-        static var previews: some View {
-            ContentView()
         }
     }
 }
